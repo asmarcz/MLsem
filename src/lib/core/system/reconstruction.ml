@@ -5,6 +5,19 @@ open TVOp
 open Ast
 open Mlsem_utils
 
+(* ===== Logs and errors ===== *)
+
+type log = {
+  eid: Eid.t ;
+  kind: Checker.error_kind ;
+  title: string ;
+  descr: Format.formatter -> unit }
+
+let error_priority = function
+| Checker.InvalidAnnot -> 20
+| Checker.UnboundVar -> 10
+| _ -> 0
+
 (* ===== Initial Annot ===== *)
 
 let initial ?(direct_narrowing=true) ?(partition_narrowing=true) refinements e =
@@ -90,7 +103,6 @@ type ('a,'b) result =
 | Fail
 | Subst of (Subst.t * IAnnot.res) list * 'b * 'b * REnv.t
 
-type log = { eid: Eid.t ; title: string ; descr: Format.formatter -> unit }
 type cache = { dom : Domain.t ; logs : log list ref }
 
 (* Auxiliary *)
@@ -228,8 +240,8 @@ let rec refine cache env annot (id, e) =
   | IAnnot.I { rid ; ann ; refinement } -> refine_ann refinement cache env (rid, ann) (id, e)
 and refine_ann r cache env (rid, annot) (id, e) =
   let open IAnnot in
-  let log msg descr =
-    let log = { eid=id ; title=msg ; descr } in
+  let log kind msg descr =
+    let log = { eid=id ; kind ; title=msg ; descr } in
     cache.logs := log::!(cache.logs)
   in
   let env = REnv.refine_env env r in
@@ -244,7 +256,7 @@ and refine_ann r cache env (rid, annot) (id, e) =
     let ss = if !Config.infer_overload || Ty.is_empty t2 then ss else
       ss |> List.filter (fun (s, _) -> Subst.apply s t2 |> Ty.non_empty)
     in
-    log "untypeable application" (fun fmt ->
+    log Checker.UntypeableApp "untypeable application" (fun fmt ->
       Format.fprintf fmt "function: @[<h>%a@]@.argument: @[<h>%a@]" Ty.pp t1 Ty.pp t2
       ) ;
     ss
@@ -254,7 +266,8 @@ and refine_ann r cache env (rid, annot) (id, e) =
   | Var v, AVar f ->
     begin match Env.find_opt v env with
     | None ->
-      log "unbound variable" (fun fmt -> Format.fprintf fmt "name: %a" Variable.pp v) ;
+      log Checker.UnboundVar "unbound variable"
+        (fun fmt -> Format.fprintf fmt "name: %a" Variable.pp v) ;
       Fail
     | Some ty ->
       let tvs, _ = TyScheme.get ty in
@@ -271,7 +284,7 @@ and refine_ann r cache env (rid, annot) (id, e) =
         doms |> List.concat_map (fun doms ->
         tally_simpl env (Ast.construct c tys) (List.combine tys doms)
       ) in
-      log "untypeable constructor" (fun fmt ->
+      log Checker.UntypeableConstructor "untypeable constructor" (fun fmt ->
         Format.fprintf fmt "expected: @[<h>%a@]@.given: @[<h>%a@]"
           (Utils.pp_seq (Utils.pp_seq Ty.pp " ; ") " ;; ") doms
           (Utils.pp_seq Ty.pp " ; ") tys
@@ -303,7 +316,7 @@ and refine_ann r cache env (rid, annot) (id, e) =
       let tys' = List.map GTy.lb tys' in
       let cs = List.combine tys' (List.map GTy.lb tys) in
       let ss = tally_simpl env (Tuple.mk tys') cs in
-      log "untypeable recursive function" (fun fmt ->
+      log Checker.UntypeableRec "untypeable recursive function" (fun fmt ->
         Format.fprintf fmt "cannot unify the body with self"
         ) ;
       let ok_ann = ac (Annot.ALambdaRec (List.combine tys annots)) in
@@ -347,7 +360,8 @@ and refine_ann r cache env (rid, annot) (id, e) =
     in
     begin match aux es anns with
     | Either.Left lst when List.for_all Option.is_none lst ->
-      log "untypeable encoding" (fun fmt -> Format.fprintf fmt "%s" (settings.aerror env)) ;
+      log Checker.UntypeableEncoding "untypeable encoding"
+        (fun fmt -> Format.fprintf fmt "%s" (settings.aerror env)) ;
       Fail
     | Either.Left lst -> retry_with (ac (Annot.AAlt lst))
     | Either.Right (ss,a,a',r) -> Subst (ss,AAlt(true,a)|>ic,AAlt(true,a')|>ic,r)
@@ -379,7 +393,7 @@ and refine_ann r cache env (rid, annot) (id, e) =
       let ty = Ast.domain_of_proj p res in
       let s = GTy.lb s in
       let ss = tally_simpl env res [(s, ty)] in
-      log "untypeable projection" (fun fmt ->
+      log Checker.UntypeableProjection "untypeable projection" (fun fmt ->
         Format.fprintf fmt "argument: @[<h>%a@]" Ty.pp s
         ) ;
       Subst (with_res ss, ac (Annot.AProj annot'), ic Untyp, REnv.empty)
@@ -418,7 +432,7 @@ and refine_ann r cache env (rid, annot) (id, e) =
       let cs = match c with
         | Check -> [lbc;ubc] | CheckStatic -> [lbc] | NoCheck -> [] in
       let ss = tally_simpl env (GTy.lb (GTy.cap t s)) cs in
-      log "untypeable cast" (fun fmt ->
+      log Checker.UntypeableCast "untypeable cast" (fun fmt ->
         if c = Check then
           Format.fprintf fmt "expected: @[<h>%a@]@.given: @[<h>%a@]" GTy.pp t GTy.pp s
         else if c = CheckStatic then
@@ -435,7 +449,7 @@ and refine_ann r cache env (rid, annot) (id, e) =
       let cs = match c with
         | Check -> [lbc;ubc] | CheckStatic -> [lbc] | NoCheck -> [] in
       let ss = tally_simpl env (GTy.lb t) cs in
-      log "untypeable coercion" (fun fmt ->
+      log Checker.UntypeableCoercion "untypeable coercion" (fun fmt ->
         if c = Check then
           Format.fprintf fmt "expected: @[<h>%a@]@.given: @[<h>%a@]" GTy.pp t GTy.pp s
         else if c = CheckStatic then
@@ -553,13 +567,20 @@ let refine env iannot e =
   let cache = { dom = Domain.empty ; logs = ref [] } in
   match refine' cache env iannot e with
   | Fail ->
-    begin match !(cache.logs) with
-    | [] ->
-      let err = { Checker.eid=Eid.dummy ;
+    (* Logs are stored in reverse chronological order, so this keeps
+       the most recent log among those of highest priority. *)
+    let best = !(cache.logs) |> List.fold_left (fun best log ->
+      match best with
+      | Some b when error_priority b.kind >= error_priority log.kind -> best
+      | _ -> Some log) None
+    in
+    begin match best with
+    | None ->
+      let err = { Checker.eid=Eid.dummy ; kind=Checker.InvalidAnnot ;
         title="annotation reconstruction failed" ; descr=None } in
       raise (Checker.Untypeable err)
-    | log::_ ->
-      let err = { Checker.eid=log.eid ; title=log.title ;
+    | Some log ->
+      let err = { Checker.eid=log.eid ; title=log.title ; kind=log.kind ;
         descr=(Some (Format.asprintf "%a" (fun fmt () -> log.descr fmt) ())) } in
       raise (Checker.Untypeable err)
     end

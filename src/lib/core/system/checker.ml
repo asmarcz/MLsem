@@ -16,10 +16,20 @@ let is_type_test_unsat ~tau t =
 
 (* Expressions *)
 
-type error = { eid: Eid.t ; title: string ; descr: string option }
+type error_kind =
+| UnboundVar
+| UntypeableApp
+| UntypeableConstructor
+| UntypeableRec
+| UntypeableEncoding
+| UntypeableProjection
+| UntypeableCast
+| UntypeableCoercion
+| InvalidAnnot
+type error = { eid: Eid.t ; kind: error_kind ; title: string ; descr: string option }
 exception Untypeable of error
 
-let untypeable id msg = raise (Untypeable { eid=id ; title=msg ; descr=None })
+let untypeable id msg = raise (Untypeable { eid=id ; kind=InvalidAnnot ; title=msg ; descr=None })
 
 let proj_is_gen p =
   match p with

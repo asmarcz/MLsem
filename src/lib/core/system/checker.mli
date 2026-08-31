@@ -15,7 +15,17 @@ val is_type_test_unsat : tau:GTy.t -> GTy.t -> Ty.t
    if and only if a branch [tau] of a typecase on an expression of type [ty]
    is unreachable *)
 
-type error = { eid: Eid.t ; title: string ; descr: string option }
+type error_kind =
+| UnboundVar
+| UntypeableApp
+| UntypeableConstructor
+| UntypeableRec
+| UntypeableEncoding
+| UntypeableProjection
+| UntypeableCast
+| UntypeableCoercion
+| InvalidAnnot
+type error = { eid: Eid.t ; kind: error_kind ; title: string ; descr: string option }
 exception Untypeable of error
 (** Raised when the annotation is not a valid derivation for the expression.
     In normal operation the reconstruction only produces valid annotations, so
