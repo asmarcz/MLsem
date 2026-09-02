@@ -103,7 +103,10 @@ type ('a,'b) result =
 | Fail
 | Subst of (Subst.t * IAnnot.res) list * 'b * 'b * REnv.t
 
-type cache = { dom : Domain.t ; logs : log list ref }
+type cache = { dom : Domain.t ; logs : log list ref ;
+               (* When set, a log produced anywhere below the [Alt] that set it
+                  carries that [Alt]'s encoding error instead of its own. *)
+               alt_err : (Eid.t * (Format.formatter -> unit)) option }
 
 (* Auxiliary *)
 
@@ -241,7 +244,12 @@ let rec refine cache env annot (id, e) =
 and refine_ann r cache env (rid, annot) (id, e) =
   let open IAnnot in
   let log kind msg descr =
-    let log = { eid=id ; kind ; title=msg ; descr } in
+    let eid, kind, msg, descr =
+      match cache.alt_err with
+      | Some (eid, descr) -> eid, Checker.UntypeableEncoding, "untypeable encoding", descr
+      | None -> id, kind, msg, descr
+    in
+    let log = { eid ; kind ; title=msg ; descr } in
     cache.logs := log::!(cache.logs)
   in
   let env = REnv.refine_env env r in
@@ -347,6 +355,8 @@ and refine_ann r cache env (rid, annot) (id, e) =
     let anns = List.map2 (fun ann b -> if b then ann else None) anns mask in
     retry_with (ic (AAlt (true, anns)))
   | Alt (settings,es), AAlt (true, anns) ->
+    let cache = { cache with alt_err =
+      Some (id, fun fmt -> Format.fprintf fmt "%s" (settings.aerror env)) } in
     let rec aux es anns =
       match es, anns with
       | [], [] -> Either.left []
@@ -359,10 +369,7 @@ and refine_ann r cache env (rid, annot) (id, e) =
       | _, _ -> assert false
     in
     begin match aux es anns with
-    | Either.Left lst when List.for_all Option.is_none lst ->
-      log Checker.UntypeableEncoding "untypeable encoding"
-        (fun fmt -> Format.fprintf fmt "%s" (settings.aerror env)) ;
-      Fail
+    | Either.Left lst when List.for_all Option.is_none lst -> Fail
     | Either.Left lst -> retry_with (ac (Annot.AAlt lst))
     | Either.Right (ss,a,a',r) -> Subst (ss,AAlt(true,a)|>ic,AAlt(true,a')|>ic,r)
     end
@@ -564,7 +571,7 @@ and refine_part_seq' cache env e v s lst =
     (lst |> List.map (fun a -> (a,())))
 
 let refine env iannot e =
-  let cache = { dom = Domain.empty ; logs = ref [] } in
+  let cache = { dom = Domain.empty ; logs = ref [] ; alt_err = None } in
   match refine' cache env iannot e with
   | Fail ->
     (* Logs are stored in reverse chronological order, so this keeps
