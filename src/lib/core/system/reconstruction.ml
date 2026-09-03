@@ -5,19 +5,6 @@ open TVOp
 open Ast
 open Mlsem_utils
 
-(* ===== Logs and errors ===== *)
-
-type log = {
-  eid: Eid.t ;
-  kind: Checker.error_kind ;
-  title: string ;
-  descr: Format.formatter -> unit }
-
-let error_priority = function
-| Checker.InvalidAnnot -> 20
-| Checker.UnboundVar -> 10
-| _ -> 0
-
 (* ===== Initial Annot ===== *)
 
 let initial ?(direct_narrowing=true) ?(partition_narrowing=true) refinements e =
@@ -102,6 +89,12 @@ type ('a,'b) result =
 | Ok of 'a * GTy.t
 | Fail
 | Subst of (Subst.t * IAnnot.res) list * 'b * 'b * REnv.t
+
+type log = {
+  eid: Eid.t ;
+  kind: Checker.error_kind ;
+  title: string ;
+  descr: Format.formatter -> unit }
 
 type cache = { dom : Domain.t ; logs : log list ref ;
                (* When set, a log produced anywhere below the [Alt] that set it
@@ -574,19 +567,12 @@ let refine env iannot e =
   let cache = { dom = Domain.empty ; logs = ref [] ; alt_err = None } in
   match refine' cache env iannot e with
   | Fail ->
-    (* Logs are stored in reverse chronological order, so this keeps
-       the most recent log among those of highest priority. *)
-    let best = !(cache.logs) |> List.fold_left (fun best log ->
-      match best with
-      | Some b when error_priority b.kind >= error_priority log.kind -> best
-      | _ -> Some log) None
-    in
-    begin match best with
-    | None ->
+    begin match !(cache.logs) with
+    | [] ->
       let err = { Checker.eid=Eid.dummy ; kind=Checker.InvalidAnnot ;
         title="annotation reconstruction failed" ; descr=None } in
       raise (Checker.Untypeable err)
-    | Some log ->
+    | log::_ ->
       let err = { Checker.eid=log.eid ; title=log.title ; kind=log.kind ;
         descr=(Some (Format.asprintf "%a" (fun fmt () -> log.descr fmt) ())) } in
       raise (Checker.Untypeable err)
