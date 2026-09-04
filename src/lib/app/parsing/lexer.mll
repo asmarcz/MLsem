@@ -25,6 +25,7 @@ let blank   = [' ' '\009' '\012']
 
 let id = ['a'-'z''_']['a'-'z''A'-'Z''0'-'9''_''\'']*
 let indexed_id = ['a'-'z''_']['a'-'z''A'-'Z''0'-'9''_''\'']*'['
+let param_id = ['a'-'z''_']['a'-'z''A'-'Z''0'-'9''_''\'']*'('
 let constr_id = ['A'-'Z']['a'-'z''A'-'Z''0'-'9''_''\'']*
 let param_constr_id = ['A'-'Z']['a'-'z''A'-'Z''0'-'9''_''\'']*'('
 
@@ -46,11 +47,13 @@ let op_char =  '!' | '$' | '%' | '&' | '*' | '+' | '-' |
                '?' | '@' | '^' | '|' | '~'
 
 let prefix_op = ('!' | '?' | '~') op_char*
+(* An infix operator cannot start with a '.', which is already heavily overloaded:
+   for instance [(-5..-1)] must be parsed as a range, not a [..-] application. *)
 let infix_op = ('=' | '<' | '>' | '@' | '$'
-              | '+' | '-' | '*' | '/' | '^' | '%'
-              | '&' op_char | '|' op_char | '.' op_char ) op_char*
+              | '+' | '-' | '*' | '/' | '^' | '%' | '&' | '|' ) op_char*
 let indexed_op = ']' ('=' | '<' | '>' | '@' | '$') op_char*
-let op_id = '(' ' '* ('[' (indexed_op | ']') | prefix_op | infix_op) ' '* ')'
+(* [".."] is still usable as an infix operator. *)
+let op_id = '(' ' '* ('[' (indexed_op | ']') | ".." | prefix_op | infix_op) ' '* ')'
 
 rule token = parse
 | newline { enter_newline lexbuf |> token }
@@ -138,6 +141,7 @@ rule token = parse
 | '\'' '\\' (backslash_escapes as c) '\'' { LCHAR (char_for_backslash c) }
 | id as s { ID s }
 | indexed_id as s { IID (String.sub s 0 ((String.length s) - 1)) }
+| param_id as s { PID (String.sub s 0 ((String.length s) - 1)) }
 | ")[" { IRPAREN }
 | constr_id as s { CID s }
 | param_constr_id as s { PCID (String.sub s 0 ((String.length s) - 1)) }

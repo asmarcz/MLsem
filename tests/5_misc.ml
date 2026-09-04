@@ -165,7 +165,7 @@ val (==) : ((any,any)-> bool) & (('a, ~'a)-> false)
 let member (e,l) =
 match l with
 | [] -> false
-| h::t -> lor (e == h, member(e,t))
+| h::t -> lor (e == h, member (e,t))
 end
 
 type objF('a) = { f : 'a? ; proto : (objF('a))? ..}

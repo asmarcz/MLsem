@@ -77,6 +77,51 @@
         TBase (TTupleN (int_of_string nb))
       else
         TCustom str
+
+  (* Types and regular expressions share the same grammar: each production
+     builds a [Regexp] when a regexp-specific construct is involved, and a [Ty]
+     otherwise. The conversions below are applied depending on what is expected
+     at the use site. *)
+
+  type typ_cst =
+  | Ty of Mlsem_types.TyExpr.t
+  | Regexp of Mlsem_types.TyExpr.regexp
+
+  let as_typ (s,e) cst =
+    match cst with
+    | Ty ty -> ty
+    | Regexp _ ->
+      raise (SyntaxError (Position.lex_join s e, "unexpected regular expression"))
+
+  let as_regexp _loc cst =
+    match cst with
+    (* [TOption] is only meaningful for record fields: in a regexp position,
+       [t?] denotes the optional regular expression instead. *)
+    | Ty (TOption ty) -> Option (Symbol ty)
+    | Ty ty -> Symbol ty
+    | Regexp r -> r
+
+  let cst_cup l1 c1 l2 c2 =
+    match c1, c2 with
+    | Ty t1, Ty t2 -> Ty (TCup (t1, t2))
+    | _ ->
+      let r2 = as_regexp l2 c2 in
+      begin match as_regexp l1 c1 with
+      | Union rs -> Regexp (Union (rs@[r2]))
+      | r1 -> Regexp (Union [r1;r2])
+      end
+
+  let cst_concat l1 c1 l2 c2 =
+    let r2 = as_regexp l2 c2 in
+    match as_regexp l1 c1 with
+    | Concat rs -> Regexp (Concat (rs@[r2]))
+    | r1 -> Regexp (Concat [r1;r2])
+
+  let cst_option c =
+    match c with
+    (* Meaning of [?] on a type: optional record field *)
+    | Ty t -> Ty (TOption t)
+    | Regexp r -> Regexp (Option r)
 %}
 
 %token EOF
@@ -91,7 +136,7 @@
 %token AND_KW OR_KW
 %token TYPE WHERE ABSTRACT
 %token LBRACKET RBRACKET SEMICOLON DOUBLESEMICOLON
-%token<string> ID IID CID PCID
+%token<string> ID IID PID CID PCID
 %token<string> TVAR TVAR_WEAK RVAR RVAR_WEAK
 %token<float> LFLOAT
 %token<Z.t> LINT
@@ -137,13 +182,11 @@ element:
 | LET ds=separated_nonempty_list(AND_KW, tl_let) { annot $symbolstartpos $endpos (Definitions ds) }
 | VAL m=mut id=generalized_identifier COLON ty=typ { annot $symbolstartpos $endpos (SigDef (id, m, ty)) }
 | TYPE ts=separated_nonempty_list(AND_KW, param_type_def) { annot $symbolstartpos $endpos (Types ts) }
-| ABSTRACT TYPE name=ID params=abs_params { annot $symbolstartpos $endpos (AbsType (name, params)) }
+| ABSTRACT TYPE name=ID { annot $symbolstartpos $endpos (AbsType (name, 0)) }
+| ABSTRACT TYPE name=PID vs=separated_nonempty_list(COMMA, TVAR) RPAREN
+  { annot $symbolstartpos $endpos (AbsType (name, List.length vs)) }
 | HASHTAG cmd=ID EQUAL v=literal { annot $symbolstartpos $endpos (Command (cmd, v)) }
 | DEBUG d=dbg { annot $symbolstartpos $endpos (Debug d) }
-
-%inline abs_params:
-  { 0 }
-| LPAREN vs=separated_nonempty_list(COMMA, TVAR) RPAREN { List.length vs }
 
 (* ===== DEBUG TERMS ===== *)
 
@@ -337,50 +380,70 @@ prefix:
 
 (* ===== TYPES ===== *)
 
-%inline param_type_def:
-| name=ID EQUAL t=typ_norec { (name, [], t) }
-| name=ID LPAREN params=separated_list(COMMA, TVAR) RPAREN EQUAL t=typ_norec { (name, params, t) }
+(* The productions below build a [typ_cst], i.e. either a type or a regular
+   expression, so that both share the same syntax (in particular the same
+   parentheses for grouping). *)
 
-typ:
+%inline param_type_def:
+| name=ID EQUAL t=typ_norec { (name, [], as_typ $loc(t) t) }
+| name=PID params=separated_list(COMMA, TVAR) RPAREN EQUAL t=typ_norec
+  { (name, params, as_typ $loc(t) t) }
+
+typ: t=typ_cst { as_typ $loc(t) t }
+
+typ_cst:
   t=typ_norec { t }
 | t=typ_norec WHERE ts=separated_nonempty_list(AND_KW, param_type_def)
-  { TWhere (t, ts) }
+  { Ty (TWhere (as_typ $loc(t) t, ts)) }
 
 typ_norec:
   t=simple_typ { t }
-| hd=simple_typ COMMA tl=separated_nonempty_list(COMMA, simple_typ) { TTuple (hd::tl) }
+| hd=simple_typ COMMA tl=separated_nonempty_list(COMMA, simple_typ)
+  { Ty (TTuple (hd::tl |> List.map (as_typ $loc))) }
 
 simple_typ:
+  t=concat_typ { t }
+| lhs=simple_typ ARROW rhs=simple_typ { Ty (TArrow (as_typ $loc(lhs) lhs, as_typ $loc(rhs) rhs)) }
+| lhs=simple_typ CONS rhs=simple_typ  { Ty (TCons (as_typ $loc(lhs) lhs, as_typ $loc(rhs) rhs)) }
+| NEG t=simple_typ { Ty (TNeg (as_typ $loc(t) t)) }
+| lhs=simple_typ OR rhs=simple_typ   { cst_cup $loc(lhs) lhs $loc(rhs) rhs }
+| lhs=simple_typ OOR rhs=simple_typ  { cst_cup $loc(lhs) lhs $loc(rhs) rhs }
+| lhs=simple_typ AND rhs=simple_typ  { Ty (TCap (as_typ $loc(lhs) lhs, as_typ $loc(rhs) rhs)) }
+| lhs=simple_typ AAND rhs=simple_typ { Ty (TCap (as_typ $loc(lhs) lhs, as_typ $loc(rhs) rhs)) }
+| lhs=simple_typ DIFF rhs=simple_typ { Ty (TDiff (as_typ $loc(lhs) lhs, as_typ $loc(rhs) rhs)) }
+
+(* Concatenation of a regular expression (juxtaposition) *)
+concat_typ:
+  t=postfix_typ { t }
+| lhs=concat_typ rhs=postfix_typ { cst_concat $loc(lhs) lhs $loc(rhs) rhs }
+
+postfix_typ:
   t=atomic_typ { t }
-| s=ID LPAREN ts=separated_list(COMMA, simple_typ) RPAREN { TApp(s, ts) }
-| lhs=simple_typ ARROW rhs=simple_typ { TArrow (lhs, rhs) }
-| lhs=simple_typ CONS rhs=simple_typ  { TCons (lhs, rhs) }
-| NEG t=simple_typ { TNeg t }
-| ty=atomic_typ INTERROGATION_MARK { TOption ty }
-| lhs=simple_typ OR rhs=simple_typ  { TCup (lhs, rhs) }
-| lhs=simple_typ AND rhs=simple_typ { TCap (lhs, rhs) }
-| lhs=simple_typ OOR rhs=simple_typ  { TCup (lhs, rhs) }
-| lhs=simple_typ AAND rhs=simple_typ { TCap (lhs, rhs) }
-| lhs=simple_typ DIFF rhs=simple_typ  { TDiff (lhs, rhs) }
-| r=atomic_typ POINT id=ID  { TRecProj (r, id) }
-| r=atomic_typ POINT id=CID  { TTagProj (r, id) }
+| t=postfix_typ TIMES { Regexp (Star (as_regexp $loc(t) t)) }
+| t=postfix_typ PLUS  { Regexp (Plus (as_regexp $loc(t) t)) }
+| t=postfix_typ INTERROGATION_MARK { cst_option t }
 
 atomic_typ:
-  x=type_constant { TBase x }
-| DYN { TDyn }
-| s=ID { builtin_type_or_custom s }
-| s=CID { TEnum s }
-| s=PCID t=typ RPAREN { TTag (s, t) }
-| s=PCID RPAREN { TTag (s, TBase TUnit) }
-| s=TVAR { TVar (KNoInfer, s) }
-| s=TVAR_WEAK { TVar (KInfer, s) }
-| s=RVAR { TRowVar (KNoInfer, s) }
-| s=RVAR_WEAK { TRowVar (KInfer, s) }
-| LPAREN RPAREN { TBase TUnit }
-| LPAREN t=typ RPAREN { t }
-| LBRACE fs=separated_list(SEMICOLON, typ_field) tail=optional_tail RBRACE { TRecord (fs,tail) }
-| LBRACE br=typ WITH fs=separated_list(SEMICOLON, typ_field) RBRACE { TRecUpd (br, fs) }
-| LBRACKET re=typ_re RBRACKET { TSList re }
+  x=type_constant { Ty (TBase x) }
+| DYN { Ty TDyn }
+| s=ID { Ty (builtin_type_or_custom s) }
+| s=PID ts=separated_list(COMMA, simple_typ) RPAREN
+  { Ty (TApp (s, ts |> List.map (as_typ $loc))) }
+| s=CID { Ty (TEnum s) }
+| s=PCID t=typ RPAREN { Ty (TTag (s, t)) }
+| s=PCID RPAREN { Ty (TTag (s, TBase TUnit)) }
+| s=TVAR { Ty (TVar (KNoInfer, s)) }
+| s=TVAR_WEAK { Ty (TVar (KInfer, s)) }
+| s=RVAR { Ty (TRowVar (KNoInfer, s)) }
+| s=RVAR_WEAK { Ty (TRowVar (KInfer, s)) }
+| LPAREN RPAREN { Ty (TBase TUnit) }
+| LPAREN t=typ_cst RPAREN { t }
+| LBRACE fs=separated_list(SEMICOLON, typ_field) tail=optional_tail RBRACE { Ty (TRecord (fs,tail)) }
+| LBRACE br=typ WITH fs=separated_list(SEMICOLON, typ_field) RBRACE { Ty (TRecUpd (br, fs)) }
+| LBRACKET RBRACKET { Ty (TSList Epsilon) }
+| LBRACKET t=typ_cst RBRACKET { Ty (TSList (as_regexp $loc(t) t)) }
+| r=atomic_typ POINT id=ID  { Ty (TRecProj (as_typ $loc(r) r, id)) }
+| r=atomic_typ POINT id=CID { Ty (TTagProj (as_typ $loc(r) r, id)) }
 
 %inline optional_tail:
 | DOUBLESEMICOLON ty=typ { ty }
@@ -388,13 +451,13 @@ atomic_typ:
 | { TOption (TBase TEmpty) }
 
 %inline typ_field:
-  id=ID COLON t=simple_typ { (id, t) }
+  id=ID COLON t=simple_typ { (id, as_typ $loc(t) t) }
 
 %inline type_constant:
 | i=tint { TInt (Some i, Some i) }
 | LPAREN i1=tint? DOUBLEPOINT i2=tint? RPAREN { TInt (i1,i2) }
 | c=LCHAR { TCharInt (c,c) }
-| LPAREN c1=LCHAR MINUS c2=LCHAR RPAREN { TCharInt (c1,c2) }
+| LPAREN c1=LCHAR DOUBLEPOINT c2=LCHAR RPAREN { TCharInt (c1,c2) }
 | b=LBOOL { if b then TTrue else TFalse }
 | str=LSTRING { TSString str }
 
@@ -402,25 +465,6 @@ tint:
   i=LINT { i }
 // | PLUS i=LINT { i } // conflict with with regexp
 | MINUS i=LINT { Z.neg i }
-
-(* ===== REGEX ===== *)
-
-typ_re:
-| { Epsilon }
-| re=nonempty_re { re }
-
-nonempty_re:
-| res=separated_nonempty_list(OR, simple_re) { Union res }
-
-simple_re:
-| res=nonempty_list(atomic_re) { Concat res }
-
-atomic_re:
-  t=atomic_typ { Symbol t }
-| EXCLAMATION_MARK LPAREN re=nonempty_re RPAREN { re }
-| re=atomic_re TIMES { Star re }
-| re=atomic_re PLUS { Plus re }
-| re=atomic_re INTERROGATION_MARK { Option re }
 
 (* ===== PATTERNS ===== *)
 
@@ -449,7 +493,7 @@ simple_pattern_nocons:
 | lhs=simple_pattern_nocons OR rhs=atomic_pattern { PatOr (lhs, rhs) }
 
 atomic_pattern:
-  COLON t=atomic_typ { PatType t }
+  COLON t=atomic_typ { PatType (as_typ $loc(t) t) }
 | v=id_mid  { PatVar v }
 | PLACEHOLDER_VAR  { PatType (TBase TAny) }
 | c=literal { PatLit c }

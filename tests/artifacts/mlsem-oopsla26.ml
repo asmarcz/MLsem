@@ -306,16 +306,16 @@ let implicit13 =
 
 let example14 = fun (input : int|string) ->
   fun (extra : (any, any)) ->
-    if and_(is_int input , is_int(fst extra)) is true then
+    if and_ (is_int input , is_int (fst extra)) is true then
         add input (fst extra)
-    else if is_int(fst extra) is true then
+    else if is_int (fst extra) is true then
         add (strlen input) (fst extra)
     else 0
 
 let implicit14 = fun input ->
   fun extra ->
-    if and_(is_int input , is_int(fst extra)) is true then
+    if and_ (is_int input , is_int (fst extra)) is true then
         add input (fst extra)
-    else if is_int(fst extra) is true then
+    else if is_int (fst extra) is true then
         add (strlen input) (fst extra)
     else 0

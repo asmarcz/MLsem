@@ -2,7 +2,7 @@
 ===== Processing tests/0_hm.ml =====
 length_aux: int -> [ any* ] -> int
 length: [ any* ] -> int
-hd': ∀'a. [ !('a any*)? ] -> 'a
+hd': ∀'a. [ ('a any*)? ] -> 'a
 hd_safe: ∀'a. [ 'a any* ] -> 'a
 tl': ∀'a. [] | (any::('a & [ any* ])) -> 'a & [ any* ]
 tl_safe: ∀'a. (any::('a & [ any* ])) -> 'a & [ any* ]
@@ -11,13 +11,13 @@ nth: ∀'a. [ 'a* ] -> int -> 'a
 append: ∀'a,'b,'c. ([ 'b* ] -> ('a & ('b::x1) | 'c & 'a & [ any* ] -> 'b::x1) | ('a & ('b::x1) | 'c & 'a & [ any* ] -> 'a & ('b::x1) | 'c & 'a & [ any* ])) & ([  ] -> 'a -> 'a) where x1 = ('b::x1) | 'c & [ any* ]
 @: ∀'a,'b,'c. (([ 'b* ], 'a & ('b::x1) | 'c & 'a & [ any* ]) -> ('b::x1) | 'c & 'a & [ any* ]) & (([  ], 'a) -> 'a) where x1 = ('b::x1) | 'c & [ any* ]
 rev_append: ∀'a,'b,'c. ([ 'c* ] -> (x1 -> ('c::x1) | 'a) | (('c::x1) | 'a -> ('c::x1) | 'a)) & ([  ] -> ('a -> 'a) | ([ any* ] -> empty)) where x1 = ('c::x1) | 'b & [ any* ]
-rev: ∀'a. [ !('a | 'a 'a+)? ] -> [ !('a | 'a 'a+)? ]
+rev: ∀'a. [ ('a | 'a 'a+)? ] -> [ ('a | 'a 'a+)? ]
 flatten: ∀'a. ([ [ 'a* ]* ] -> [ 'a* ]) & ([ [  ]* ] -> [  ])
 concat: ∀'a. [ [ 'a* ]* ] -> [ 'a* ]
 map: ∀'a,'b. ('a -> 'b) -> [ 'a* ] -> [ 'b* ]
 mapi_aux: ∀'a,'b. int -> (int -> 'a -> 'b) -> [ 'a* ] -> [ 'b* ]
 mapi: ∀'a,'b. (int -> 'a -> 'b) -> [ 'a* ] -> [ 'b* ]
-fold_left: ∀'a,'b. (('a -> 'b -> 'a) -> 'a -> [ 'b* ] -> 'a) & (('a -> 'b -> empty) -> 'a -> [ !('b any*)? ] -> 'a)
+fold_left: ∀'a,'b. (('a -> 'b -> 'a) -> 'a -> [ 'b* ] -> 'a) & (('a -> 'b -> empty) -> 'a -> [ ('b any*)? ] -> 'a)
 fold_right: ∀'a,'b. ('b -> 'a -> 'a) -> [ 'b* ] -> 'a -> 'a
 height: x1 -> int where x1 = Nil | Node(x1, Key, any, x1, int)
 create: ∀'a,'b,'c,'d. 'a & (Nil | Node(x1)) -> 'b -> 'c -> 'd & (Nil | Node(x1)) -> Node('a & (Nil | Node(x1)), 'b, 'c, 'd & (Nil | Node(x1)), int) where x1 = Nil | Node(x1), Key, any, Nil | Node(x1), int
@@ -39,9 +39,9 @@ f: int | string -> int
 test: (10..15) -> int
 succ: (2 -> 3) & (3 -> 4) & (4 -> 5) & (5 -> 6) & (6 -> 7) & (7 -> 8) & (8 -> 9) & (9 -> 10) & (10 -> 11) & (11 -> 12) & (12 -> 13) & (13 -> 14) & (14 -> 15) & (15 -> 16) & (16 -> 17) & (17 -> 18) & (18 -> 19) & (19 -> 20) & (20 -> 21) & (21 -> 22) & (22 -> 23) & (23 -> 24) & (24 -> 25) & (1 -> 2) & (~(0..24) -> 0) & (0 -> 1)
 test2: (5..15) -> (10..20)
-to_bool: (int \ 0 | true | ('\001'-'\255') | string \ "" -> true) & (0 | false | '\000' | "" -> false) & (float -> bool)
+to_bool: (int \ 0 | true | ('\001'..'\255') | string \ "" -> true) & (0 | false | '\000' | "" -> false) & (float -> bool)
 and_: ((true, true) -> true) & ((any, ~true) | (~true, any) -> false)
-&&: ((int \ 0 | true | ('\001'-'\255') | string \ "", int \ 0 | true | ('\001'-'\255') | string \ "") -> true) & ((int | bool | char | float | string, int | bool | char | float | string) -> bool) & ((int | bool | char | float | string, 0 | false | '\000' | "") | (0 | false | '\000' | "", int | bool | char | float | string) -> false)
+&&: ((int \ 0 | true | ('\001'..'\255') | string \ "", int \ 0 | true | ('\001'..'\255') | string \ "") -> true) & ((int | bool | char | float | string, int | bool | char | float | string) -> bool) & ((int | bool | char | float | string, 0 | false | '\000' | "") | (0 | false | '\000' | "", int | bool | char | float | string) -> false)
 and1: false
 and2: false
 and3: true
