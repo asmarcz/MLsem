@@ -13,8 +13,19 @@ let char_for_backslash = function
   | c -> Char.chr (int_of_string ("0o"^c))
 
 exception LexerError of string
+
 module Parser = Parser
 open Parser
+
+(* Precedence class of a user-defined infix operator, determined by its first
+   character (as in OCaml). *)
+let infix_token s =
+  if String.length s >= 2 && s.[0] = '*' && s.[1] = '*' then INFIX_POW s
+  else match s.[0] with
+  | '*' | '/' | '%' -> INFIX_MUL s
+  | '+' | '-' -> INFIX_ADD s
+  | '@' | '^' -> INFIX_CAT s
+  | _ -> INFIX_CMP s
 }
 
 let backslash_escapes = ['\\' '\'' '"' 'n' 't' 'b' 'r' ' '] | ['0'-'7']['0'-'7']['0'-'7']
@@ -132,7 +143,7 @@ rule token = parse
 | float as f { LFLOAT (float_of_string f) }
 | "true"  { LBOOL true }
 | "false" { LBOOL false }
-| infix_op as s  { INFIX s }
+| infix_op as s  { infix_token s }
 | prefix_op as s { PREFIX s }
 | indexed_op as s { INDEXED s }
 | op_id as s { OPID (String.sub s 1 ((String.length s) - 2) |> String.trim) }

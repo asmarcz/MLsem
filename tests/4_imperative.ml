@@ -52,10 +52,10 @@ let test_dict x =
 let filter_arr (f:('a -> any) & ('b -> ~true)) (arr:array('a|'b)) =
   let res = array () in
   let i = ref 0 in
-  while !i < (len arr) do
+  while !i < len arr do
     let e = arr[!i] in
     if f e do push res e end ;
-    i <- (!i + 1)
+    i <- !i + 1
   end ;
   res
 
@@ -69,7 +69,7 @@ let test_arr x =
 
 let test_double_array =
   let arr = array () in
-  arr[0]<- (array ()) ;
+  arr[0]<- array () ;
   (arr[0])[0]<- 42 ;
   (arr[0])[0]
 
@@ -78,7 +78,7 @@ let arr_dict_assign x = x[0]<- x[1]
 
 let nested x y =
   let d = dict () in
-  d[x]<- (array ()) ;
+  d[x]<- array () ;
   (d[x])[0]<- y ; (d[x])[0]
 
 (* val swap : 'a -> 'a -> dict('a,'b) -> () &&
@@ -154,7 +154,7 @@ let order (x:(int|Nil,int|Nil)|Nil) =
   if x is Nil do return x end ;
   if fst x is Nil do return snd x end ;
   if snd x is Nil do return fst x end ;
-  if (snd x) < (fst x) do x := (snd x, fst x) end ;
+  if snd x < fst x do x := (snd x, fst x) end ;
   return x
 
 val rand : () -> any
@@ -187,7 +187,7 @@ let loop_valid x =
 let filter_imp (f:('a -> bool) & ('b -> false)) (arr:array('a|'b)) =
   let res = array () in
   let mut i = 0 in
-  while i < (len arr) do
+  while i < len arr do
     let e = arr[i] in
     if f e do push res e end ;
     i := i + 1
@@ -208,11 +208,11 @@ let filter_imp_test =
   arr
 
 let rec_and_imp arr k i n =
-  if k < n do arr[k]<- (i+k) ; rec_and_imp arr (k+1) i n end
+  if k < n do arr[k]<- i+k ; rec_and_imp arr (k+1) i n end
 
 let interval i j =
   let arr = array () in
-  rec_and_imp arr 0 i ((j-i)+1) ; arr
+  rec_and_imp arr 0 i (j-i+1) ; arr
 
 (* ========= Annotated mutable variables ========= *)
 

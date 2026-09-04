@@ -14,7 +14,7 @@ let fixpoint = fun f ->
    in delta delta
 
 let fact_stub fact n =
-  if n is 0 then 1 else (fact (n-1))*n
+  if n is 0 then 1 else fact (n-1) * n
 
 let fact n = fixpoint fact_stub n
 
@@ -25,7 +25,7 @@ let length lst = fixpoint length_stub lst
 
 let map_stub map f lst =
   if lst is [] then []
-  else (f (hd lst))::(map f (tl lst))
+  else f (hd lst) :: map f (tl lst)
 
 let map f lst = fixpoint map_stub f lst
 
@@ -47,7 +47,7 @@ let filter f l =
   | [] -> []
   | e::l ->
     if f e is true
-    then e::(filter f l)
+    then e::filter f l
     else filter f l
   end
 
@@ -61,15 +61,15 @@ let filtermap (f, l) =
     | x::xs ->
       match f x with
       | false -> filtermap (f, xs)
-      | true -> x::(filtermap (f, xs))
-      | (true, y) -> y::(filtermap (f, xs))
+      | true -> x::filtermap (f, xs)
+      | (true, y) -> y::filtermap (f, xs)
     end
   end
 
 let mapi_aux i f (l:['a*]) =
   match l with
   | [] -> []
-  | x::ll -> let r = f i x in r::(mapi_aux (i+1) f ll)
+  | x::ll -> let r = f i x in r::mapi_aux (i+1) f ll
   end
 
 let mapi f l = mapi_aux 0 f l

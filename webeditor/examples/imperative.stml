@@ -42,10 +42,10 @@ let test_dict x =
 let filter_arr (f:('a -> any) & ('b -> ~true)) (arr:array('a|'b)) =
   let res = array () in
   let i = ref 0 in
-  while !i < (len arr) do
+  while !i < len arr do
     let e = arr[!i] in
     if f e do push res e end ;
-    i <- (!i + 1)
+    i <- !i + 1
   end ;
   res
 
@@ -59,7 +59,7 @@ let test_arr x =
 
 let nested x y =
   let d = dict () in
-  d[x]<- (array ()) ;
+  d[x]<- array () ;
   (d[x])[0]<- y ; (d[x])[0]
 
 val swap : 'a -> 'a -> dict('a,'b) -> () &&
@@ -69,8 +69,8 @@ let swap i j x =
     x[i]<- x[j] ; x[j]<- tmp
 
 let rec_and_imp arr k i n =
-  if k < n do arr[k]<- (i+k) ; rec_and_imp arr (k+1) i n end
+  if k < n do arr[k]<- i+k ; rec_and_imp arr (k+1) i n end
 
 let interval i j =
   let arr = array () in
-  rec_and_imp arr 0 i ((j-i)+1) ; arr
+  rec_and_imp arr 0 i (j-i+1) ; arr

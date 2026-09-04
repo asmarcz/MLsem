@@ -79,7 +79,7 @@ let and_pair = fun x -> fun y ->
 
 (* val test_pair : ((int \ 0, any) | (int, int) -> int) *)
 let test_pair = fun x ->
-  if fst x is falsy then (fst x) + (snd x) else succ (fst x)
+  if fst x is falsy then fst x + snd x else succ (fst x)
 
 type tt('a, 'b)  =  'a -> 'b -> 'a
 type ff('a, 'b)  =  'a -> 'b -> 'b
@@ -101,18 +101,18 @@ let test3_patterns x y =
 (* ========= RECURSIVE FUNCTIONS ========= *)
 
 let fact (x:int) =
-  if x is 0 then 1 else x * (fact (x-1))
+  if x is 0 then 1 else x * fact (x-1)
 
 let map f (lst:['a*]) =
   match lst with
   | [] -> []
-  | a::lst -> (f a)::(map f lst)
+  | a::lst -> f a :: map f lst
   end
 
 let map_noannot f lst =
   match lst with
   | [] -> []
-  | a::lst -> (f a)::(map_noannot f lst)
+  | a::lst -> f a :: map_noannot f lst
   end
 
 let foo x = bar x
@@ -124,7 +124,7 @@ let filter f l =
   | [] -> []
   | e::l ->
     if f e is true
-    then e::(filter f l)
+    then e::filter f l
     else filter f l
   end
 
@@ -133,7 +133,7 @@ let filter2 (f: ('a->any) & ('b -> ~true)) (l:[('a|'b)*]) =
   | [] -> []
   | e::l ->
     if f e is true
-    then e::(filter2 f l)
+    then e::filter2 f l
     else filter2 f l
   end
 
@@ -153,8 +153,8 @@ let filtermap (f, l) =
     | x::xs ->
       match f x with
       | false -> filtermap (f, xs)
-      | true -> x::(filtermap (f, xs))
-      | (true, y) -> y::(filtermap (f, xs))
+      | true -> x::filtermap (f, xs)
+      | (true, y) -> y::filtermap (f, xs)
     end
   end
 
@@ -180,16 +180,16 @@ type tree('a) = [ ('a\[any*] | tree('a))* ]
 let deep_flatten (l : tree('a)) =
   match l with
   | [] -> []
-  | (x & :list)::y -> (deep_flatten x) @ (deep_flatten y)
-  | x::y -> x::(deep_flatten y)
+  | (x & :list)::y -> deep_flatten x @ deep_flatten y
+  | x::y -> x::deep_flatten y
   end
 
 type expr = ("const", (0..)) | ("add", (expr, expr)) | ("uminus", expr)
 
 let eval (e:expr) =
   match e with
-  | (:"add", (e1, e2)) -> (eval e1) + (eval e2)
-  | (:"uminus", e) -> 0 - (eval e)
+  | (:"add", (e1, e2)) -> eval e1 + eval e2
+  | (:"uminus", e) -> 0 - eval e
   | (:"const", x) -> x
   end
 

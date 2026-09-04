@@ -143,7 +143,8 @@
 %token<bool> LBOOL
 %token<char> LCHAR
 %token<string> LSTRING
-%token<string> INFIX PREFIX INDEXED OPID
+%token<string> INFIX_POW INFIX_MUL INFIX_ADD INFIX_CAT INFIX_CMP
+%token<string> PREFIX INDEXED OPID
 
 %start<Mlsem_types.TyExpr.t> unique_ty
 %start<pexpr> unique_term
@@ -250,8 +251,45 @@ simple_term: (* Cannot end with a semi-colon *)
 | id=ID ASSIGN t=simple_term { annot $startpos $endpos (VarAssign (id, t)) }
 
 simple_term2:
+  a=op_or { a }
+| t=indexed i=INDEXED t3=op_or
+{
+  let (t1,t2) = t in
+  let f = annot $startpos $endpos (Var ("["^i)) in
+  tern_app $startpos $endpos f t1 t2 t3
+}
+
+op_or:
+  a=op_and { a }
+| lhs=op_or o=infix_or rhs=op_and { bin_app $startpos $endpos o lhs rhs }
+
+op_and:
+  a=op_cmp { a }
+| lhs=op_and o=infix_and rhs=op_cmp { bin_app $startpos $endpos o lhs rhs }
+
+op_cmp:
+  a=op_cons { a }
+| lhs=op_cmp o=infix_cmp rhs=op_cons { bin_app $startpos $endpos o lhs rhs }
+
+op_cons:
+  a=op_cat { a }
+| lhs=op_cat CONS rhs=op_cons { annot $startpos $endpos (Cons (lhs, rhs)) }
+
+op_cat:
+  a=op_add { a }
+| lhs=op_add o=infix_cat rhs=op_cat { bin_app $startpos $endpos o lhs rhs }
+
+op_add:
+  a=op_mul { a }
+| lhs=op_add o=infix_add rhs=op_mul { bin_app $startpos $endpos o lhs rhs }
+
+op_mul:
+  a=op_pow { a }
+| lhs=op_mul o=infix_mul rhs=op_pow { bin_app $startpos $endpos o lhs rhs }
+
+op_pow:
   a=simple_term3 { a }
-| lhs=simple_term3 CONS rhs=simple_term2 { annot $startpos $endpos (Cons (lhs, rhs)) }
+| lhs=simple_term3 o=infix_pow rhs=op_pow { bin_app $startpos $endpos o lhs rhs }
 
 simple_term3:
   a=simple_term4 { a }
@@ -260,14 +298,7 @@ simple_term3:
 | SND a=simple_term4 { annot $startpos $endpos (TupleProj (a, 2, 1)) }
 | HD a=simple_term4 { annot $startpos $endpos (Hd a) }
 | TL a=simple_term4 { annot $startpos $endpos (Tl a) }
-| a=simple_term4 s=infix_term b=simple_term4 { bin_app $startpos $endpos s a b }
 | LT t=typ GT { annot $startpos $endpos (Magic t) }
-| t=indexed i=INDEXED t3=simple_term4
-{
-  let (t1,t2) = t in
-  let f = annot $startpos $endpos (Var ("["^i)) in
-  tern_app $startpos $endpos f t1 t2 t3
-}
 
 simple_term4:
   a=atomic_term { a }
@@ -279,9 +310,6 @@ simple_term4:
 %inline indexed:
 | x=IID t=term { annot $startpos $endpos (Var x), t }
 | LPAREN t1=terms IRPAREN t2=term { t1, t2 }
-
-infix_term:
-  x=infix { annot $startpos $endpos (Var x) }
 
 prefix_term:
   x=prefix { annot $startpos $endpos (Var x) }
@@ -355,22 +383,36 @@ parameter:
 generalized_identifier:
   | x=ID | x=OPID { x }
 
-infix:
-  | x=INFIX {x}
-  | DIV   {"/"}
-  | TIMES {"*"}
-  | PLUS  {"+"}
-  | MINUS {"-"}
-  | EQUAL {"="}
-  | LT    {"<"}
-  | GT    {">"}
-  | LEQ   {"<="}
-  | GEQ   {">="}
-  | DOUBLEPOINT {".."}
-  // | AND  {"&"}
-  // | OR   {"|"}
-  | AAND  {"&&"}
-  | OOR   {"||"}
+%inline infix_or:
+  OOR { annot $startpos $endpos (Var "||") }
+
+%inline infix_and:
+  AAND { annot $startpos $endpos (Var "&&") }
+
+%inline infix_cmp:
+  x=INFIX_CMP { annot $startpos $endpos (Var x) }
+| EQUAL { annot $startpos $endpos (Var "=") }
+| LT    { annot $startpos $endpos (Var "<") }
+| GT    { annot $startpos $endpos (Var ">") }
+| LEQ   { annot $startpos $endpos (Var "<=") }
+| GEQ   { annot $startpos $endpos (Var ">=") }
+| DOUBLEPOINT { annot $startpos $endpos (Var "..") }
+
+%inline infix_cat:
+  x=INFIX_CAT { annot $startpos $endpos (Var x) }
+
+%inline infix_add:
+  x=INFIX_ADD { annot $startpos $endpos (Var x) }
+| PLUS  { annot $startpos $endpos (Var "+") }
+| MINUS { annot $startpos $endpos (Var "-") }
+
+%inline infix_mul:
+  x=INFIX_MUL { annot $startpos $endpos (Var x) }
+| TIMES { annot $startpos $endpos (Var "*") }
+| DIV   { annot $startpos $endpos (Var "/") }
+
+%inline infix_pow:
+  x=INFIX_POW { annot $startpos $endpos (Var x) }
 
 prefix:
   | x=PREFIX {x}

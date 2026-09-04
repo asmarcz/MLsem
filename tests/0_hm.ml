@@ -57,7 +57,7 @@ let nth l n =
 let append l1 l2 =
   match l1 with
   | [] -> l2
-  | x::l -> x::(append l l2)
+  | x::l -> x::append l l2
   end
 let (@) (l1, l2) = append l1 l2
 
@@ -68,12 +68,12 @@ let rev_append l1 l2 =
   end
 
 let rev l =
-  if l is [] then [] else (rev (tl l))@[hd l]
+  if l is [] then [] else rev (tl l) @ [hd l]
 
 let flatten l =
   match l with
   | [] -> []
-  | x::r -> x @ (flatten r)
+  | x::r -> x @ flatten r
   end
 
 let concat l = flatten l
@@ -81,13 +81,13 @@ let concat l = flatten l
 let map f l =
   match l with
   | [] -> []
-  | x::ll -> (f x)::(map f ll)
+  | x::ll -> f x :: map f ll
   end
 
 let mapi_aux i f l =
   match l with
   | [] -> []
-  | x::ll -> let r = f i x in r::(mapi_aux (i+1) f ll)
+  | x::ll -> let r = f i x in r::mapi_aux (i+1) f ll
   end
 
 let mapi f x = mapi_aux 0 f x
@@ -125,11 +125,11 @@ let bal l x d r =
 (* let bal (l:t('a)) (x: Key) (d:'a) (r:t('a)) : t('a) = *)
   let hl = match l with Nil -> 0 | Node(_,_,_,_,h) -> h end in
   let hr = match r with Nil -> 0 | Node(_,_,_,_,h) -> h end in
-  if hl > (hr + 2) then
+  if hl > hr + 2 then
     match l with
     | Nil -> invalid_arg "Map.bal"
     | Node(ll, lv, ld, lr, _) ->
-      if (height ll) >= (height lr) then
+      if height ll >= height lr then
         create ll lv ld (create lr x d r)
       else
         match lr with
@@ -138,11 +138,11 @@ let bal l x d r =
           create (create ll lv ld lrl) lrv lrd (create lrr x d r)
         end
     end
-  else if hr > (hl + 2) then
+  else if hr > hl + 2 then
     match r with
     | Nil -> invalid_arg "Map.bal"
     | Node(rl, rv, rd, rr, _) ->
-      if (height rr) >= (height rl) then
+      if height rr >= height rl then
         create (create l x d rl) rv rd rr
       else
         match rl with
@@ -164,17 +164,17 @@ let fixpoint = fun f ->
    in delta delta
 
 let fact_stub fact n =
-  if n is 0 then 1 else (fact (n-1))*n
+  if n is 0 then 1 else fact (n-1) * n
 
 let fact' = fixpoint fact_stub
 
 let length_stub length lst =
-  if lst is [] then 0 else (length (tl lst))+1
+  if lst is [] then 0 else length (tl lst) + 1
 
 let length' = fixpoint length_stub
 
 let map_stub map f lst =
   if lst is [] then []
-  else (f (hd lst))::(map f (tl lst))
+  else f (hd lst) :: map f (tl lst)
 
 let map' x = fixpoint map_stub x
