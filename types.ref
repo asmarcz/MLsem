@@ -102,7 +102,7 @@ implicit8: (int | string -> true) & (~(int | string) -> false)
 example9: any -> int
 implicit9: (~(int | string) -> 0) & (any -> int)
 example10: tuple2 -> int
-implicit10: ((~int, any) -> 7) & (tuple2 -> int)
+implicit10: (tuple2 -> int) & ((~int, any) -> 7)
 example11: tuple2 -> No | int
 implicit11: ((int, int) -> int) & ((any, ~int) | (~int, any) -> No)
 example12: tuple2 -> bool
@@ -110,7 +110,7 @@ implicit12: ((~int, any) -> false) & ((int, any) -> true)
 example13: any -> any -> (1..3)
 implicit13: (int -> (string -> 1) & (~string -> 2)) & (~int -> any -> 3)
 example14: int | string -> tuple2 -> int
-implicit14: (int | string -> ((~int, any) -> 0) & (tuple2 -> int)) & (~int -> (~int, any) -> 0)
+implicit14: (int | string -> (tuple2 -> int) & ((~int, any) -> 0)) & (~int -> (~int, any) -> 0)
 connectives: int | bool | string -> int
 seq_test: any -> int
 seq_test2: untypeable application
@@ -317,7 +317,7 @@ bar: any -> empty
 filter: ∀'a,'b. ('a -> any) & ('b -> ~true) -> [ ('b | 'a)* ] -> [ ('a \ 'b)* ]
 filter2: ∀'a,'b. ('b -> ~true) & ('a -> any) -> [ ('b | 'a)* ] -> [ ('a \ 'b)* ]
 filter_noannot: ∀'a. (('a -> any) -> ([ 'a+ ] -> [ 'a* ]) & ([ 'a ] -> [ 'a? ]) & ([  ] -> [  ])) & (('a -> true) -> ([ 'a+ ] -> [ 'a+ ]) & ([  ] -> [  ])) & (('a -> ~true) -> [ 'a* ] -> [  ]) & (any -> [  ] -> [  ])
-filtermap: ∀'a,'b. (('b -> bool | (true, 'a), [ 'b* ]) -> [ ('b | 'a)* ]) & (('b -> false | (true, 'a), [ 'b* ]) -> [ 'a* ])
+filtermap: ∀'a,'b. (('b -> false | (true, 'a), [ 'b* ]) -> [ 'a* ]) & (('b -> bool | (true, 'a), [ 'b* ]) -> [ ('b | 'a)* ])
 member: ∀'a. (('a, [ (~'a)+ ]) | (any, [  ]) -> false) & ((any, [ any+ ]) -> bool)
 call_f: ∀'a. objF('a) -> () | 'a
 deep_flatten: ∀'a. tree('a) -> [ ('a \ [ any* ])* ]
