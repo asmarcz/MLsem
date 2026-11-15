@@ -168,7 +168,9 @@ let domains_of_construct (c:constructor) ty =
   | Tuple n ->
     Tuple.dnf n ty
     |> List.filter (fun b -> Ty.leq (Tuple.mk b) ty)
-  | Join n | Meet n -> [List.init n (fun _ -> ty)]
+  | Join n -> [List.init n (fun _ -> ty)]
+  | Meet n when Ty.is_any ty -> [List.init n (fun _ -> Ty.any)]
+  | Meet _ -> [ ]
   | NoGen -> [ [ty] ]
   | Normalize -> [ [ty] ]
   | Voidify ty' when Ty.leq ty' ty -> [ [Ty.any] ]
@@ -345,6 +347,12 @@ let push_coercions ?(duplicate_arrows=false) t =
   let f t =
     match t with
     | id, TypeCoerce (t, ty, c) -> coerce ~coercion_id:id ~duplicate_arrows c ty t
+    | id, LambdaRec lst ->
+      let lst = lst |> List.map (function
+        | (None, v, t) -> None, v, t
+        | (Some ty, v, t) -> Some ty, v, coerce ~duplicate_arrows CheckStatic ty t
+        ) in
+      id, LambdaRec lst
     | t -> t
   in
   map f t
